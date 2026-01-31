@@ -3,13 +3,25 @@ import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import { Webhook, WebhookInput } from './types';
 import { storage } from './storage';
+import { v4 } from 'uuid';
+import { verifyWebhook } from './middlewares/verifyWebhook';
+import { webhookSchema } from './validators/webhook.schema';
+
 dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
-app.post('/webhooks', (req: Request, res: Response) => {
-    const input = req.body as WebhookInput;
-    const id = Math.random().toString(36).substring(7);
+app.post('/webhooks', verifyWebhook, (req: Request, res: Response) => {
+    const parseResult = webhookSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+        return res.status(400).json({
+            error: 'Invalid webhook payload'
+        });
+    }
+
+    const input = parseResult.data;
+    const id = v4();
     const webhook: Webhook = {
         id,
         source: input.source,
@@ -23,18 +35,15 @@ app.post('/webhooks', (req: Request, res: Response) => {
         message: 'Webhook received'
     });
 });
-app.get('/webhooks', (req: Request, res: Response) => {
+app.get('/webhooks', verifyWebhook, (req: Request, res: Response) => {
     const allWebhooks = storage.getAll();
     res.json({
         webhooks: allWebhooks,
         count: allWebhooks.length
     });
 });
-app.get('/webhooks/:id', (req: Request, res: Response) => {
-    const { id } = req.params;
-    if (typeof id !== 'string') {
-        return res.status(400).json({ error: 'Invalid webhook id' });
-    }
+app.get('/webhooks/:id', verifyWebhook, (req: Request, res: Response) => {
+    const id = req.params.id as string;
     const webhook = storage.getById(id);
     if (!webhook) {
         return res.status(404).json({ error: 'Webhook not found' });
