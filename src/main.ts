@@ -11,6 +11,11 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
+
+if (!process.env.WEBHOOK_SECRET) {
+    throw new Error('WEBHOOK_SECRET is required');
+}
+
 app.post('/webhooks', verifyWebhook, (req: Request, res: Response) => {
     const parseResult = webhookSchema.safeParse(req.body);
 
